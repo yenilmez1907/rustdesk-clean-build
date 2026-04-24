@@ -16,10 +16,16 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          ref: 1.4.6
+  uses: actions/checkout@v4
+  with:
+    submodules: recursive
+    fetch-depth: 0
+    ref: 1.4.6
+
+    - name: Fix submodules
+  run: |
+    git submodule sync
+    git submodule update --init --recursive --force
 
       - name: Install dependencies
         run: |
