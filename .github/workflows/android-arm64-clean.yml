@@ -37,6 +37,13 @@ jobs:
         with:
           ndk-version: r28c
 
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: /opt/artifacts/vcpkg
+          vcpkgGitCommitId: 120deac3062162151622ca4860575a33844ba10b
+          doNotCache: false
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@v1
         with:
@@ -53,6 +60,8 @@ jobs:
           flutter pub get
 
       - name: Build Android deps
+        env:
+          VCPKG_ROOT: /opt/artifacts/vcpkg
         run: |
           chmod +x flutter/build_android_deps.sh
           ./flutter/build_android_deps.sh arm64-v8a
@@ -60,6 +69,7 @@ jobs:
       - name: Build native library
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          VCPKG_ROOT: /opt/artifacts/vcpkg
         run: |
           chmod +x flutter/ndk_arm64.sh
           ./flutter/ndk_arm64.sh
