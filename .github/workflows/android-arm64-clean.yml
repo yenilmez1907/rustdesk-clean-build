@@ -13,7 +13,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-          ref: 1.4.6
+          ref: clean-1.4.6
 
       - name: Fix submodules
         run: |
