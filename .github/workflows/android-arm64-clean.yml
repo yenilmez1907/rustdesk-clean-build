@@ -1,0 +1,82 @@
+﻿name: Android ARM64 Clean Build
+
+on:
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "1.75"
+  CARGO_NDK_VERSION: "3.1.2"
+  ANDROID_FLUTTER_VERSION: "3.24.5"
+  NDK_VERSION: "r28c"
+
+jobs:
+  build-android-arm64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: 1.4.6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake curl git libclang-dev ninja-build openjdk-17-jdk-headless pkg-config wget
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.ANDROID_FLUTTER_VERSION }}
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
+
+      - name: Flutter pub get
+        working-directory: flutter
+        run: |
+          rm -f pubspec.lock
+          flutter pub get
+
+      - name: Build Android deps
+        run: |
+          chmod +x flutter/build_android_deps.sh
+          ./flutter/build_android_deps.sh arm64-v8a
+
+      - name: Build native library
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          chmod +x flutter/ndk_arm64.sh
+          ./flutter/ndk_arm64.sh
+          mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
+          cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+          ls -lh flutter/android/app/src/main/jniLibs/arm64-v8a/
+
+      - name: Build APK
+        working-directory: flutter
+        run: |
+          flutter build apk --release --target-platform android-arm64
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustdesk-1.4.6-arm64-clean-apk
+          path: flutter/build/app/outputs/flutter-apk/*.apk
