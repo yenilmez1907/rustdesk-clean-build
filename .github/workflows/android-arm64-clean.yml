@@ -9,7 +9,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4a
         with:
           submodules: recursive
           fetch-depth: 0
@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake curl git libclang-dev ninja-build openjdk-17-jdk-headless pkg-config wget
+          sudo apt-get install -y clang cmake curl git libclang-dev ninja-build openjdk-17-jdk-headless pkg-config wget nasm
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
