@@ -944,7 +944,7 @@ class MainService : Service() {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.getService(this, 111, intent, FLAG_IMMUTABLE)
         } else {
-            PendingIntent.getService(this, 111, FLAG_UPDATE_CURRENT)
+            PendingIntent.getService(this, 111, intent, FLAG_UPDATE_CURRENT)
         }
     }
 
