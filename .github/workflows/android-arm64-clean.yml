@@ -25,11 +25,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            build-essential \
             clang \
             cmake \
             curl \
+            g++ \
+            gcc \
+            g++-multilib \
+            gcc-multilib \
             git \
+            libc6-dev \
             libclang-dev \
+            libstdc++-13-dev \
             nasm \
             ninja-build \
             openjdk-17-jdk-headless \
@@ -85,6 +92,7 @@ jobs:
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           VCPKG_ROOT: /opt/artifacts/vcpkg
           VCPKG_BINARY_SOURCES: clear
+          RUST_BACKTRACE: "1"
         run: |
           chmod +x flutter/ndk_arm64.sh
           ./flutter/ndk_arm64.sh
