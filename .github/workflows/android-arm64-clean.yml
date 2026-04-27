@@ -3,12 +3,36 @@
 on:
   workflow_dispatch:
 
+env:
+  RUST_VERSION: "1.75"
+  CARGO_NDK_VERSION: "3.1.2"
+  ANDROID_FLUTTER_VERSION: "3.24.5"
+  NDK_VERSION: "r27c"
+  VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  VERSION: "1.4.6"
+  VCPKG_BINARY_SOURCES: "clear"
+
 jobs:
+  generate-bridge:
+    uses: ./.github/workflows/bridge.yml
+
   build-android-arm64:
-    runs-on: ubuntu-latest
+    needs: [generate-bridge]
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
 
     steps:
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -29,54 +53,58 @@ jobs:
             clang \
             cmake \
             curl \
-            g++ \
-            gcc \
-            g++-multilib \
             gcc-multilib \
             git \
+            g++ \
+            g++-multilib \
+            libayatana-appindicator3-dev \
+            libasound2-dev \
             libc6-dev \
             libclang-dev \
-            libstdc++-13-dev \
+            libunwind-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgtk-3-dev \
+            libpam0g-dev \
+            libpulse-dev \
+            libva-dev \
+            libxcb-randr0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxdo-dev \
+            libxfixes-dev \
+            llvm-dev \
             nasm \
             ninja-build \
             openjdk-17-jdk-headless \
             pkg-config \
+            tree \
             wget
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.24.5
+          flutter-version: ${{ env.ANDROID_FLUTTER_VERSION }}
+
+      - name: Patch Flutter
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r28c
+          ndk-version: ${{ env.NDK_VERSION }}
           add-to-path: true
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: /opt/artifacts/vcpkg
-          vcpkgGitCommitId: 120deac3062162151622ca4860575a33844ba10b
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
           doNotCache: false
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: 1.75
-          targets: aarch64-linux-android
-
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk --version 3.1.2 --locked
-
-      - name: Flutter pub get
-        working-directory: flutter
-        run: |
-          rm -f pubspec.lock
-          flutter pub get
 
       - name: Build Android deps
         env:
@@ -84,9 +112,33 @@ jobs:
           VCPKG_BINARY_SOURCES: clear
         run: |
           chmod +x flutter/build_android_deps.sh
-          ./flutter/build_android_deps.sh arm64-v8a
+          if ! ./flutter/build_android_deps.sh arm64-v8a; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do
+              echo "$f:"
+              echo "======"
+              cat "$f"
+              echo "======"
+            done
+            exit 1
+          fi
 
-      - name: Build native library
+      - name: Restore bridge files
+        uses: actions/download-artifact@master
+        with:
+          name: bridge-artifact
+          path: ./
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android
+          components: rustfmt
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
+
+      - name: Build rustdesk native lib
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
@@ -96,17 +148,38 @@ jobs:
         run: |
           chmod +x flutter/ndk_arm64.sh
           ./flutter/ndk_arm64.sh
+
           mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
-          cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+
+          cp target/aarch64-linux-android/release/liblibrustdesk.so \
+            flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+
+          cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so \
+            flutter/android/app/src/main/jniLibs/arm64-v8a/
+
           ls -lh flutter/android/app/src/main/jniLibs/arm64-v8a/
 
       - name: Build APK
-        working-directory: flutter
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
         run: |
-          flutter build apk --release --target-platform android-arm64
+          export PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
+
+          sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties || true
+
+          # release key yoksa debug signing ile APK üret
+          sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle || true
+
+          pushd flutter
+          flutter build apk --release --target-platform android-arm64 --split-per-abi
+          popd
+
+          mkdir -p signed-apk
+          cp flutter/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk signed-apk/rustdesk-${VERSION}-aarch64.apk
+          ls -lh signed-apk/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: rustdesk-android-arm64-apk
-          path: flutter/build/app/outputs/flutter-apk/*.apk
+          path: signed-apk/*.apk
