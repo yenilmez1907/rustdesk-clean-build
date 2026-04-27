@@ -38,12 +38,20 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-          ref: clean-1.4.6
+          ref: ${{ github.ref_name }}
 
       - name: Fix submodules
         run: |
           git submodule sync
           git submodule update --init --recursive --force
+
+      - name: Verify rotation patch is included
+        run: |
+          echo "Current branch/ref: ${{ github.ref_name }}"
+          git log -1 --oneline
+          grep -n "bbRotationMode" flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainService.kt
+          grep -n "rotateFrameIfNeeded" flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainService.kt
+          grep -n "captureWidth" flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainService.kt
 
       - name: Install dependencies
         run: |
@@ -123,7 +131,7 @@ jobs:
           fi
 
       - name: Restore bridge files
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           name: bridge-artifact
           path: ./
