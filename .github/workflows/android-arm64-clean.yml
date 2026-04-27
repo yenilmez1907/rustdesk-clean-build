@@ -6,10 +6,11 @@ on:
 jobs:
   build-android-arm64:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4a
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
@@ -23,7 +24,17 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake curl git libclang-dev ninja-build openjdk-17-jdk-headless pkg-config wget nasm
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            curl \
+            git \
+            libclang-dev \
+            nasm \
+            ninja-build \
+            openjdk-17-jdk-headless \
+            pkg-config \
+            wget
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
@@ -36,6 +47,7 @@ jobs:
         id: setup-ndk
         with:
           ndk-version: r28c
+          add-to-path: true
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -62,6 +74,7 @@ jobs:
       - name: Build Android deps
         env:
           VCPKG_ROOT: /opt/artifacts/vcpkg
+          VCPKG_BINARY_SOURCES: clear
         run: |
           chmod +x flutter/build_android_deps.sh
           ./flutter/build_android_deps.sh arm64-v8a
@@ -69,19 +82,23 @@ jobs:
       - name: Build native library
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           VCPKG_ROOT: /opt/artifacts/vcpkg
+          VCPKG_BINARY_SOURCES: clear
         run: |
           chmod +x flutter/ndk_arm64.sh
           ./flutter/ndk_arm64.sh
           mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
           cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+          ls -lh flutter/android/app/src/main/jniLibs/arm64-v8a/
 
       - name: Build APK
         working-directory: flutter
-        run: flutter build apk --release --target-platform android-arm64
+        run: |
+          flutter build apk --release --target-platform android-arm64
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-apk
+          name: rustdesk-android-arm64-apk
           path: flutter/build/app/outputs/flutter-apk/*.apk
