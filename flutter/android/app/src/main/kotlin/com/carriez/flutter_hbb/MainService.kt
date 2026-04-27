@@ -64,7 +64,6 @@ class MainService : Service() {
     @Keep
     @RequiresApi(Build.VERSION_CODES.N)
     fun rustPointerInput(kind: Int, mask: Int, x: Int, y: Int) {
-        // turn on screen with LEFT_DOWN when screen off
         if (!powerManager.isInteractive && (kind == 0 || mask == LEFT_DOWN)) {
             if (wakeLock.isHeld) {
                 Log.d(logTag, "Turn on Screen, WakeLock release")
@@ -74,10 +73,10 @@ class MainService : Service() {
             wakeLock.acquire(5000)
         } else {
             when (kind) {
-                0 -> { // touch
+                0 -> {
                     InputService.ctx?.onTouchInput(mask, x, y)
                 }
-                1 -> { // mouse
+                1 -> {
                     InputService.ctx?.onMouseInput(mask, x, y)
                 }
                 else -> {
@@ -137,6 +136,7 @@ class MainService : Service() {
                     e.printStackTrace()
                 }
             }
+
             "update_voice_call_state" -> {
                 try {
                     val jsonObject = JSONObject(arg1)
@@ -176,10 +176,12 @@ class MainService : Service() {
                     e.printStackTrace()
                 }
             }
+
             "stop_capture" -> {
                 Log.d(logTag, "from rust:stop_capture")
                 stopCapture()
             }
+
             "half_scale" -> {
                 val halfScale = arg1.toBoolean()
                 if (isHalfScale != halfScale) {
@@ -187,6 +189,7 @@ class MainService : Service() {
                     updateScreenInfo(resources.configuration.orientation)
                 }
             }
+
             else -> {
             }
         }
@@ -207,13 +210,16 @@ class MainService : Service() {
     }
 
     companion object {
-        private var _isReady = false // media permission ready status
-        private var _isStart = false // screen capture start status
-        private var _isAudioStart = false // audio capture start status
+        private var _isReady = false
+        private var _isStart = false
+        private var _isAudioStart = false
+
         val isReady: Boolean
             get() = _isReady
+
         val isStart: Boolean
             get() = _isStart
+
         val isAudioStart: Boolean
             get() = _isAudioStart
     }
@@ -227,14 +233,59 @@ class MainService : Service() {
     // BB CUSTOM FIX:
     // 90: saat yönü
     // 270: saat yönünün tersi
-    // Eğer ilk testte görüntü ters yöne dönerse sadece bunu 270 yapacağız.
     private val bbRotationMode = 270
 
     // ImageReader / VirtualDisplay için capture ölçüsü.
-    // SCREEN_INFO ise Rust tarafına bildirilen son görüntü ölçüsüdür.
+    // SCREEN_INFO Rust tarafına bildirilen son görüntü ölçüsüdür.
     private var captureWidth = 0
     private var captureHeight = 0
     private var captureDpi = 0
+
+    // BB CUSTOM FIX:
+    // Her frame'de yeni direct buffer üretmek yerine 4'lü buffer havuzu kullanıyoruz.
+    // Bu, native Rust tarafında SIGSEGV riskini azaltmak için.
+    private val rotateBufferPool = arrayOfNulls<ByteBuffer>(4)
+    private var rotateBufferSize = 0
+    private var rotateBufferIndex = 0
+
+    private fun getRotateBuffer(size: Int): ByteBuffer {
+        if (size <= 0) {
+            throw IllegalArgumentException("Invalid rotate buffer size:$size")
+        }
+
+        if (rotateBufferSize != size) {
+            for (i in rotateBufferPool.indices) {
+                rotateBufferPool[i] = null
+            }
+            rotateBufferSize = size
+            rotateBufferIndex = 0
+            Log.d(logTag, "Reset rotate buffer pool size:$size")
+        }
+
+        val idx = rotateBufferIndex % rotateBufferPool.size
+        var out = rotateBufferPool[idx]
+
+        if (out == null || out.capacity() < size) {
+            out = ByteBuffer.allocateDirect(size)
+            rotateBufferPool[idx] = out
+            Log.d(logTag, "Allocated rotate buffer index:$idx size:$size")
+        }
+
+        rotateBufferIndex = (idx + 1) % rotateBufferPool.size
+
+        out.clear()
+        out.limit(size)
+        return out
+    }
+
+    private fun clearRotateBuffers() {
+        for (i in rotateBufferPool.indices) {
+            rotateBufferPool[i] = null
+        }
+        rotateBufferSize = 0
+        rotateBufferIndex = 0
+        Log.d(logTag, "Cleared rotate buffer pool")
+    }
 
     // video
     private var mediaProjection: MediaProjection? = null
@@ -264,7 +315,6 @@ class MainService : Service() {
         updateScreenInfo(resources.configuration.orientation)
         initNotification()
 
-        // keep the config dir same with flutter
         val prefs = applicationContext.getSharedPreferences(KEY_SHARED_PREFERENCES, FlutterActivity.MODE_PRIVATE)
         val configPath = prefs.getString(KEY_APP_DIR_CONFIG_PATH, "") ?: ""
         FFI.startServer(configPath, "")
@@ -319,10 +369,9 @@ class MainService : Service() {
         val max = max(rawW, rawH)
         val min = min(rawW, rawH)
 
-        // Viewer'a bildirilecek son ekran ölçüsü.
-        // Bunu Android'in orientation değerine göre normal hesaplıyoruz.
         var outW: Int
         var outH: Int
+
         if (orientation == ORIENTATION_LANDSCAPE) {
             outW = max
             outH = min
@@ -331,16 +380,16 @@ class MainService : Service() {
             outH = max
         }
 
-        // Capture ölçüsü.
-        // Frame'i 90/270 döndüreceksek capture tarafı ters ölçüde açılmalı.
         var capW = outW
         var capH = outH
+
         if (isRotating90or270()) {
             capW = outH
             capH = outW
         }
 
         var scale = 1
+
         if (outW != 0 && outH != 0) {
             if (isHalfScale == true && (outW > MAX_SCREEN_SIZE || outH > MAX_SCREEN_SIZE)) {
                 scale = 2
@@ -353,12 +402,12 @@ class MainService : Service() {
 
             val changed =
                 SCREEN_INFO.width != outW ||
-                SCREEN_INFO.height != outH ||
-                SCREEN_INFO.scale != scale ||
-                SCREEN_INFO.dpi != dpi ||
-                captureWidth != capW ||
-                captureHeight != capH ||
-                captureDpi != dpi
+                    SCREEN_INFO.height != outH ||
+                    SCREEN_INFO.scale != scale ||
+                    SCREEN_INFO.dpi != dpi ||
+                    captureWidth != capW ||
+                    captureHeight != capH ||
+                    captureDpi != dpi
 
             if (changed) {
                 SCREEN_INFO.width = outW
@@ -408,13 +457,13 @@ class MainService : Service() {
             if (intent.getBooleanExtra(EXT_INIT_FROM_BOOT, false)) {
                 FFI.startService()
             }
+
             Log.d(logTag, "service starting: ${startId}:${Thread.currentThread()}")
             val mediaProjectionManager =
                 getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
             intent.getParcelableExtra<Intent>(EXT_MEDIA_PROJECTION_RES_INTENT)?.let {
-                mediaProjection =
-                    mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, it)
+                mediaProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, it)
                 checkMediaPermission()
                 _isReady = true
             } ?: let {
@@ -422,7 +471,7 @@ class MainService : Service() {
                 requestMediaProjection()
             }
         }
-        return START_NOT_STICKY // don't use sticky (auto restart), the new service (from auto restart) will lose control
+        return START_NOT_STICKY
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -445,10 +494,9 @@ class MainService : Service() {
         rowStride: Int,
         pixelStride: Int
     ): ByteBuffer {
-        val out = ByteBuffer.allocateDirect(width * height * 4)
+        val size = width * height * 4
+        val out = getRotateBuffer(size)
 
-        // Source: width x height
-        // Output after 90 CW: height x width
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val srcPos = y * rowStride + x * pixelStride
@@ -464,7 +512,8 @@ class MainService : Service() {
             }
         }
 
-        out.rewind()
+        out.position(0)
+        out.limit(size)
         return out
     }
 
@@ -475,10 +524,9 @@ class MainService : Service() {
         rowStride: Int,
         pixelStride: Int
     ): ByteBuffer {
-        val out = ByteBuffer.allocateDirect(width * height * 4)
+        val size = width * height * 4
+        val out = getRotateBuffer(size)
 
-        // Source: width x height
-        // Output after 270 CW / 90 CCW: height x width
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val srcPos = y * rowStride + x * pixelStride
@@ -494,7 +542,8 @@ class MainService : Service() {
             }
         }
 
-        out.rewind()
+        out.position(0)
+        out.limit(size)
         return out
     }
 
@@ -518,23 +567,25 @@ class MainService : Service() {
     @SuppressLint("WrongConstant")
     private fun createSurface(): Surface? {
         return if (useVP9) {
-            // TODO
             null
         } else {
             val cw = getCaptureWidth()
             val ch = getCaptureHeight()
 
-            Log.d(logTag, "ImageReader.newInstance capture:${cw}x${ch}, output:${SCREEN_INFO.width}x${SCREEN_INFO.height}, rotation:$bbRotationMode")
+            Log.d(
+                logTag,
+                "ImageReader.newInstance capture:${cw}x${ch}, output:${SCREEN_INFO.width}x${SCREEN_INFO.height}, rotation:$bbRotationMode"
+            )
+
             imageReader =
                 ImageReader.newInstance(
                     cw,
                     ch,
                     PixelFormat.RGBA_8888,
-                    4
+                    2
                 ).apply {
                     setOnImageAvailableListener({ imageReader: ImageReader ->
                         try {
-                            // If not call acquireLatestImage, listener will not be called again
                             imageReader.acquireLatestImage().use { image ->
                                 if (image == null || !isStart) return@setOnImageAvailableListener
 
@@ -557,6 +608,7 @@ class MainService : Service() {
                         }
                     }, serviceHandler)
                 }
+
             Log.d(logTag, "ImageReader.setOnImageAvailableListener done")
             imageReader?.surface
         }
@@ -574,6 +626,7 @@ class MainService : Service() {
         if (isStart) {
             return true
         }
+
         if (mediaProjection == null) {
             Log.w(logTag, "startCapture fail,mediaProjection is null")
             return false
@@ -597,6 +650,7 @@ class MainService : Service() {
                 audioRecordHandle.startAudioRecorder()
             }
         }
+
         checkMediaPermission()
         _isStart = true
         FFI.setFrameRawEnable("video", true)
@@ -610,33 +664,32 @@ class MainService : Service() {
         FFI.setFrameRawEnable("video", false)
         _isStart = false
         MainActivity.rdClipboardManager?.setCaptureStarted(_isStart)
-        // release video
+
         if (reuseVirtualDisplay) {
-            // The virtual display video projection can be paused by calling `setSurface(null)`.
-            // https://developer.android.com/reference/android/hardware/display/VirtualDisplay.Callback
-            // https://learn.microsoft.com/en-us/dotnet/api/android.hardware.display.virtualdisplay.callback.onpaused?view=net-android-34.0
             virtualDisplay?.setSurface(null)
         } else {
             virtualDisplay?.release()
         }
-        // suface needs to be release after `imageReader.close()` to imageReader access released surface
-        // https://github.com/rustdesk/rustdesk/issues/4118#issuecomment-1515666629
+
         imageReader?.close()
         imageReader = null
+
+        clearRotateBuffers()
+
         videoEncoder?.let {
             it.signalEndOfInputStream()
             it.stop()
             it.release()
         }
+
         if (!reuseVirtualDisplay) {
             virtualDisplay = null
         }
-        videoEncoder = null
-        // suface needs to be release after `imageReader.close()` to imageReader access released surface
-        // https://github.com/rustdesk/rustdesk/issues/4118#issuecomment-1515666629
-        surface?.release()
 
-        // release audio
+        videoEncoder = null
+        surface?.release()
+        surface = null
+
         _isAudioStart = false
         audioRecordHandle.tryReleaseAudio()
     }
@@ -677,11 +730,16 @@ class MainService : Service() {
     }
 
     private fun startRawVideoRecorder(mp: MediaProjection) {
-        Log.d(logTag, "startRawVideoRecorder, output:${SCREEN_INFO.width}x${SCREEN_INFO.height}, capture:${getCaptureWidth()}x${getCaptureHeight()}")
+        Log.d(
+            logTag,
+            "startRawVideoRecorder, output:${SCREEN_INFO.width}x${SCREEN_INFO.height}, capture:${getCaptureWidth()}x${getCaptureHeight()}"
+        )
+
         if (surface == null) {
             Log.d(logTag, "startRawVideoRecorder failed,surface is null")
             return
         }
+
         createOrSetVirtualDisplay(mp, surface!!)
     }
 
@@ -698,8 +756,6 @@ class MainService : Service() {
         }
     }
 
-    // https://github.com/bk138/droidVNC-NG/blob/b79af62db5a1c08ed94e6a91464859ffed6f4e97/app/src/main/java/net/christianbeier/droidvnc_ng/MediaProjectionService.java#L250
-    // Reuse virtualDisplay if it exists, to avoid media projection confirmation dialog every connection.
     private fun createOrSetVirtualDisplay(mp: MediaProjection, s: Surface) {
         try {
             val cw = getCaptureWidth()
@@ -718,13 +774,13 @@ class MainService : Service() {
             }
         } catch (e: SecurityException) {
             Log.w(logTag, "createOrSetVirtualDisplay: got SecurityException, re-requesting confirmation")
-            // This initiates a prompt dialog for the user to confirm screen projection.
             requestMediaProjection()
         }
     }
 
     private val cb: MediaCodec.Callback = object : MediaCodec.Callback() {
         override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {}
+
         override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {}
 
         override fun onOutputBufferAvailable(
@@ -736,7 +792,6 @@ class MainService : Service() {
                 sendVP9Thread.execute {
                     val byteArray = ByteArray(buf.limit())
                     buf.get(byteArray)
-                    // sendVp9(byteArray)
                     codec.releaseOutputBuffer(index, false)
                 }
             }
@@ -750,8 +805,10 @@ class MainService : Service() {
     private fun createMediaCodec() {
         Log.d(logTag, "MediaFormat.MIMETYPE_VIDEO_VP9 :$MIME_TYPE")
         videoEncoder = MediaCodec.createEncoderByType(MIME_TYPE)
+
         val mFormat =
             MediaFormat.createVideoFormat(MIME_TYPE, getCaptureWidth(), getCaptureHeight())
+
         mFormat.setInteger(MediaFormat.KEY_BIT_RATE, VIDEO_KEY_BIT_RATE)
         mFormat.setInteger(MediaFormat.KEY_FRAME_RATE, VIDEO_KEY_FRAME_RATE)
         mFormat.setInteger(
@@ -759,6 +816,7 @@ class MainService : Service() {
             MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
         )
         mFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 5)
+
         try {
             videoEncoder!!.configure(mFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         } catch (e: Exception) {
@@ -795,11 +853,13 @@ class MainService : Service() {
             addCategory(Intent.CATEGORY_LAUNCHER)
             putExtra("type", type)
         }
+
         val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.getActivity(this, 0, intent, FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
         } else {
             PendingIntent.getActivity(this, 0, intent, FLAG_UPDATE_CURRENT)
         }
+
         val notification = notificationBuilder
             .setOngoing(true)
             .setSmallIcon(R.mipmap.ic_stat_logo)
@@ -813,6 +873,7 @@ class MainService : Service() {
             .setColor(ContextCompat.getColor(this, R.color.primary))
             .setWhen(System.currentTimeMillis())
             .build()
+
         startForeground(DEFAULT_NOTIFY_ID, notification)
     }
 
@@ -827,10 +888,8 @@ class MainService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setContentTitle(translate("Do you accept?"))
             .setContentText("$type:$username-$peerId")
-            // .setStyle(MediaStyle().setShowActionsInCompactView(0, 1))
-            // .addAction(R.drawable.check_blue, "check", genLoginRequestPendingIntent(true))
-            // .addAction(R.drawable.close_red, "close", genLoginRequestPendingIntent(false))
             .build()
+
         notificationManager.notify(getClientNotifyID(clientID), notification)
     }
 
@@ -847,6 +906,7 @@ class MainService : Service() {
             .setContentTitle("$type ${translate("Established")}")
             .setContentText("$username - $peerId")
             .build()
+
         notificationManager.notify(getClientNotifyID(clientID), notification)
     }
 
@@ -862,6 +922,7 @@ class MainService : Service() {
             .setContentTitle(translate("Do you accept?"))
             .setContentText("$type:$username-$peerId")
             .build()
+
         notificationManager.notify(getClientNotifyID(clientID), notification)
     }
 
@@ -879,22 +940,25 @@ class MainService : Service() {
             action = ACT_LOGIN_REQ_NOTIFY
             putExtra(EXT_LOGIN_REQ_NOTIFY, res)
         }
+
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.getService(this, 111, intent, FLAG_IMMUTABLE)
         } else {
-            PendingIntent.getService(this, 111, intent, FLAG_UPDATE_CURRENT)
+            PendingIntent.getService(this, 111, FLAG_UPDATE_CURRENT)
         }
     }
 
     private fun setTextNotification(_title: String?, _text: String?) {
         val title = _title ?: DEFAULT_NOTIFY_TITLE
         val text = _text ?: translate(DEFAULT_NOTIFY_TEXT)
+
         val notification = notificationBuilder
             .clearActions()
             .setStyle(null)
             .setContentTitle(title)
             .setContentText(text)
             .build()
+
         notificationManager.notify(DEFAULT_NOTIFY_ID, notification)
     }
 }
