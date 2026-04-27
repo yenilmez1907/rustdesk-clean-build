@@ -38,13 +38,13 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
+import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
-import org.json.JSONException
-import org.json.JSONObject
-import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.min
+import org.json.JSONException
+import org.json.JSONObject
 
 const val DEFAULT_NOTIFY_TITLE = "RustDesk"
 const val DEFAULT_NOTIFY_TEXT = "Service is running"
@@ -54,7 +54,6 @@ const val NOTIFY_ID_OFFSET = 100
 const val MIME_TYPE = MediaFormat.MIMETYPE_VIDEO_VP9
 
 // video const
-
 const val MAX_SCREEN_SIZE = 1200
 
 const val VIDEO_KEY_BIT_RATE = 1024_000
@@ -71,7 +70,7 @@ class MainService : Service() {
                 Log.d(logTag, "Turn on Screen, WakeLock release")
                 wakeLock.release()
             }
-            Log.d(logTag,"Turn on Screen")
+            Log.d(logTag, "Turn on Screen")
             wakeLock.acquire(5000)
         } else {
             when (kind) {
@@ -98,9 +97,9 @@ class MainService : Service() {
         return when (name) {
             "screen_size" -> {
                 JSONObject().apply {
-                    put("width",SCREEN_INFO.width)
-                    put("height",SCREEN_INFO.height)
-                    put("scale",SCREEN_INFO.scale)
+                    put("width", SCREEN_INFO.width)
+                    put("height", SCREEN_INFO.height)
+                    put("scale", SCREEN_INFO.scale)
                 }.toString()
             }
             "is_start" -> {
@@ -152,19 +151,25 @@ class MainService : Service() {
                         } else {
                             if (!audioRecordHandle.switchOutVoiceCall(mediaProjection)) {
                                 Log.e(logTag, "switchOutVoiceCall fail")
-                                MainActivity.flutterMethodChannel?.invokeMethod("msgbox", mapOf(
-                                    "type" to "custom-nook-nocancel-hasclose-error",
-                                    "title" to "Voice call",
-                                    "text" to "Failed to switch out voice call."))
+                                MainActivity.flutterMethodChannel?.invokeMethod(
+                                    "msgbox", mapOf(
+                                        "type" to "custom-nook-nocancel-hasclose-error",
+                                        "title" to "Voice call",
+                                        "text" to "Failed to switch out voice call."
+                                    )
+                                )
                             }
                         }
                     } else {
                         if (!audioRecordHandle.switchToVoiceCall(mediaProjection)) {
                             Log.e(logTag, "switchToVoiceCall fail")
-                            MainActivity.flutterMethodChannel?.invokeMethod("msgbox", mapOf(
-                                "type" to "custom-nook-nocancel-hasclose-error",
-                                "title" to "Voice call",
-                                "text" to "Failed to switch to voice call."))
+                            MainActivity.flutterMethodChannel?.invokeMethod(
+                                "msgbox", mapOf(
+                                    "type" to "custom-nook-nocancel-hasclose-error",
+                                    "title" to "Voice call",
+                                    "text" to "Failed to switch to voice call."
+                                )
+                            )
                         }
                     }
                 } catch (e: JSONException) {
@@ -181,7 +186,6 @@ class MainService : Service() {
                     isHalfScale = halfScale
                     updateScreenInfo(resources.configuration.orientation)
                 }
-                
             }
             else -> {
             }
@@ -191,8 +195,16 @@ class MainService : Service() {
     private var serviceLooper: Looper? = null
     private var serviceHandler: Handler? = null
 
-    private val powerManager: PowerManager by lazy { applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager }
-    private val wakeLock: PowerManager.WakeLock by lazy { powerManager.newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "rustdesk:wakelock")}
+    private val powerManager: PowerManager by lazy {
+        applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+    }
+
+    private val wakeLock: PowerManager.WakeLock by lazy {
+        powerManager.newWakeLock(
+            PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.SCREEN_BRIGHT_WAKE_LOCK,
+            "rustdesk:wakelock"
+        )
+    }
 
     companion object {
         private var _isReady = false // media permission ready status
@@ -212,6 +224,18 @@ class MainService : Service() {
 
     private var reuseVirtualDisplay = Build.VERSION.SDK_INT > 33
 
+    // BB CUSTOM FIX:
+    // 90: saat yönü
+    // 270: saat yönünün tersi
+    // Eğer ilk testte görüntü ters yöne dönerse sadece bunu 270 yapacağız.
+    private val bbRotationMode = 90
+
+    // ImageReader / VirtualDisplay için capture ölçüsü.
+    // SCREEN_INFO ise Rust tarafına bildirilen son görüntü ölçüsüdür.
+    private var captureWidth = 0
+    private var captureHeight = 0
+    private var captureDpi = 0
+
     // video
     private var mediaProjection: MediaProjection? = null
     private var surface: Surface? = null
@@ -230,7 +254,7 @@ class MainService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(logTag,"MainService onCreate, sdk int:${Build.VERSION.SDK_INT} reuseVirtualDisplay:$reuseVirtualDisplay")
+        Log.d(logTag, "MainService onCreate, sdk int:${Build.VERSION.SDK_INT} reuseVirtualDisplay:$reuseVirtualDisplay")
         FFI.init(this)
         HandlerThread("Service", Process.THREAD_PRIORITY_BACKGROUND).apply {
             start()
@@ -254,53 +278,103 @@ class MainService : Service() {
         super.onDestroy()
     }
 
-    private var isHalfScale: Boolean? = null;
+    private var isHalfScale: Boolean? = null
+
+    private fun isRotating90or270(): Boolean {
+        return bbRotationMode == 90 || bbRotationMode == 270
+    }
+
+    private fun getCaptureWidth(): Int {
+        return if (captureWidth > 0) captureWidth else SCREEN_INFO.width
+    }
+
+    private fun getCaptureHeight(): Int {
+        return if (captureHeight > 0) captureHeight else SCREEN_INFO.height
+    }
+
+    private fun getCaptureDpi(): Int {
+        return if (captureDpi > 0) captureDpi else SCREEN_INFO.dpi
+    }
+
     private fun updateScreenInfo(orientation: Int) {
-        var w: Int
-        var h: Int
+        var rawW: Int
+        var rawH: Int
         var dpi: Int
         val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
         @Suppress("DEPRECATION")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val m = windowManager.maximumWindowMetrics
-            w = m.bounds.width()
-            h = m.bounds.height()
+            rawW = m.bounds.width()
+            rawH = m.bounds.height()
             dpi = resources.configuration.densityDpi
         } else {
             val dm = DisplayMetrics()
             windowManager.defaultDisplay.getRealMetrics(dm)
-            w = dm.widthPixels
-            h = dm.heightPixels
+            rawW = dm.widthPixels
+            rawH = dm.heightPixels
             dpi = dm.densityDpi
         }
 
-        val max = max(w,h)
-        val min = min(w,h)
-        // BB CUSTOM FIX:
-        // Bu tabletlerde MediaProjection frame yönünü ters verdiği için
-        // RustDesk capture ölçülerini ters çeviriyoruz.
+        val max = max(rawW, rawH)
+        val min = min(rawW, rawH)
+
+        // Viewer'a bildirilecek son ekran ölçüsü.
+        // Bunu Android'in orientation değerine göre normal hesaplıyoruz.
+        var outW: Int
+        var outH: Int
         if (orientation == ORIENTATION_LANDSCAPE) {
-          w = min
-          h = max
+            outW = max
+            outH = min
         } else {
-          w = max
-          h = min
+            outW = min
+            outH = max
         }
-        Log.d(logTag,"updateScreenInfo:w:$w,h:$h")
+
+        // Capture ölçüsü.
+        // Frame'i 90/270 döndüreceksek capture tarafı ters ölçüde açılmalı.
+        var capW = outW
+        var capH = outH
+        if (isRotating90or270()) {
+            capW = outH
+            capH = outW
+        }
+
         var scale = 1
-        if (w != 0 && h != 0) {
-            if (isHalfScale == true && (w > MAX_SCREEN_SIZE || h > MAX_SCREEN_SIZE)) {
+        if (outW != 0 && outH != 0) {
+            if (isHalfScale == true && (outW > MAX_SCREEN_SIZE || outH > MAX_SCREEN_SIZE)) {
                 scale = 2
-                w /= scale
-                h /= scale
+                outW /= scale
+                outH /= scale
+                capW /= scale
+                capH /= scale
                 dpi /= scale
             }
-            if (SCREEN_INFO.width != w) {
-                SCREEN_INFO.width = w
-                SCREEN_INFO.height = h
+
+            val changed =
+                SCREEN_INFO.width != outW ||
+                SCREEN_INFO.height != outH ||
+                SCREEN_INFO.scale != scale ||
+                SCREEN_INFO.dpi != dpi ||
+                captureWidth != capW ||
+                captureHeight != capH ||
+                captureDpi != dpi
+
+            if (changed) {
+                SCREEN_INFO.width = outW
+                SCREEN_INFO.height = outH
                 SCREEN_INFO.scale = scale
                 SCREEN_INFO.dpi = dpi
+
+                captureWidth = capW
+                captureHeight = capH
+                captureDpi = dpi
+
+                Log.d(
+                    logTag,
+                    "updateScreenInfo output:${SCREEN_INFO.width}x${SCREEN_INFO.height}, capture:${captureWidth}x${captureHeight}, dpi:$dpi, rotation:$bbRotationMode"
+                )
+
                 if (isStart) {
                     stopCapture()
                     FFI.refreshScreen()
@@ -309,7 +383,6 @@ class MainService : Service() {
                     FFI.refreshScreen()
                 }
             }
-
         }
     }
 
@@ -365,17 +438,97 @@ class MainService : Service() {
         startActivity(intent)
     }
 
+    private fun rotateRgba90Cw(
+        src: ByteBuffer,
+        width: Int,
+        height: Int,
+        rowStride: Int,
+        pixelStride: Int
+    ): ByteBuffer {
+        val out = ByteBuffer.allocateDirect(width * height * 4)
+
+        // Source: width x height
+        // Output after 90 CW: height x width
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val srcPos = y * rowStride + x * pixelStride
+
+                val dstX = height - 1 - y
+                val dstY = x
+                val dstPos = (dstY * height + dstX) * 4
+
+                out.put(dstPos, src.get(srcPos))
+                out.put(dstPos + 1, src.get(srcPos + 1))
+                out.put(dstPos + 2, src.get(srcPos + 2))
+                out.put(dstPos + 3, src.get(srcPos + 3))
+            }
+        }
+
+        out.rewind()
+        return out
+    }
+
+    private fun rotateRgba270Cw(
+        src: ByteBuffer,
+        width: Int,
+        height: Int,
+        rowStride: Int,
+        pixelStride: Int
+    ): ByteBuffer {
+        val out = ByteBuffer.allocateDirect(width * height * 4)
+
+        // Source: width x height
+        // Output after 270 CW / 90 CCW: height x width
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val srcPos = y * rowStride + x * pixelStride
+
+                val dstX = y
+                val dstY = width - 1 - x
+                val dstPos = (dstY * height + dstX) * 4
+
+                out.put(dstPos, src.get(srcPos))
+                out.put(dstPos + 1, src.get(srcPos + 1))
+                out.put(dstPos + 2, src.get(srcPos + 2))
+                out.put(dstPos + 3, src.get(srcPos + 3))
+            }
+        }
+
+        out.rewind()
+        return out
+    }
+
+    private fun rotateFrameIfNeeded(
+        src: ByteBuffer,
+        width: Int,
+        height: Int,
+        rowStride: Int,
+        pixelStride: Int
+    ): ByteBuffer {
+        return when (bbRotationMode) {
+            90 -> rotateRgba90Cw(src, width, height, rowStride, pixelStride)
+            270 -> rotateRgba270Cw(src, width, height, rowStride, pixelStride)
+            else -> {
+                src.rewind()
+                src
+            }
+        }
+    }
+
     @SuppressLint("WrongConstant")
     private fun createSurface(): Surface? {
         return if (useVP9) {
             // TODO
             null
         } else {
-            Log.d(logTag, "ImageReader.newInstance:INFO:$SCREEN_INFO")
+            val cw = getCaptureWidth()
+            val ch = getCaptureHeight()
+
+            Log.d(logTag, "ImageReader.newInstance capture:${cw}x${ch}, output:${SCREEN_INFO.width}x${SCREEN_INFO.height}, rotation:$bbRotationMode")
             imageReader =
                 ImageReader.newInstance(
-                    SCREEN_INFO.width,
-                    SCREEN_INFO.height,
+                    cw,
+                    ch,
                     PixelFormat.RGBA_8888,
                     4
                 ).apply {
@@ -384,12 +537,23 @@ class MainService : Service() {
                             // If not call acquireLatestImage, listener will not be called again
                             imageReader.acquireLatestImage().use { image ->
                                 if (image == null || !isStart) return@setOnImageAvailableListener
-                                val planes = image.planes
-                                val buffer = planes[0].buffer
+
+                                val plane = image.planes[0]
+                                val buffer = plane.buffer
                                 buffer.rewind()
-                                FFI.onVideoFrameUpdate(buffer)
+
+                                val fixedBuffer = rotateFrameIfNeeded(
+                                    buffer,
+                                    image.width,
+                                    image.height,
+                                    plane.rowStride,
+                                    plane.pixelStride
+                                )
+
+                                FFI.onVideoFrameUpdate(fixedBuffer)
                             }
-                        } catch (ignored: java.lang.Exception) {
+                        } catch (e: java.lang.Exception) {
+                            Log.e(logTag, "onImageAvailable frame rotate error:$e")
                         }
                     }, serviceHandler)
                 }
@@ -414,7 +578,7 @@ class MainService : Service() {
             Log.w(logTag, "startCapture fail,mediaProjection is null")
             return false
         }
-        
+
         updateScreenInfo(resources.configuration.orientation)
         Log.d(logTag, "Start Capture")
         surface = createSurface()
@@ -435,7 +599,7 @@ class MainService : Service() {
         }
         checkMediaPermission()
         _isStart = true
-        FFI.setFrameRawEnable("video",true)
+        FFI.setFrameRawEnable("video", true)
         MainActivity.rdClipboardManager?.setCaptureStarted(_isStart)
         return true
     }
@@ -443,7 +607,7 @@ class MainService : Service() {
     @Synchronized
     fun stopCapture() {
         Log.d(logTag, "Stop Capture")
-        FFI.setFrameRawEnable("video",false)
+        FFI.setFrameRawEnable("video", false)
         _isStart = false
         MainActivity.rdClipboardManager?.setCaptureStarted(_isStart)
         // release video
@@ -513,7 +677,7 @@ class MainService : Service() {
     }
 
     private fun startRawVideoRecorder(mp: MediaProjection) {
-        Log.d(logTag, "startRawVideoRecorder,screen info:$SCREEN_INFO")
+        Log.d(logTag, "startRawVideoRecorder, output:${SCREEN_INFO.width}x${SCREEN_INFO.height}, capture:${getCaptureWidth()}x${getCaptureHeight()}")
         if (surface == null) {
             Log.d(logTag, "startRawVideoRecorder failed,surface is null")
             return
@@ -538,18 +702,22 @@ class MainService : Service() {
     // Reuse virtualDisplay if it exists, to avoid media projection confirmation dialog every connection.
     private fun createOrSetVirtualDisplay(mp: MediaProjection, s: Surface) {
         try {
+            val cw = getCaptureWidth()
+            val ch = getCaptureHeight()
+            val cdpi = getCaptureDpi()
+
             virtualDisplay?.let {
-                it.resize(SCREEN_INFO.width, SCREEN_INFO.height, SCREEN_INFO.dpi)
+                it.resize(cw, ch, cdpi)
                 it.setSurface(s)
             } ?: let {
                 virtualDisplay = mp.createVirtualDisplay(
                     "RustDeskVD",
-                    SCREEN_INFO.width, SCREEN_INFO.height, SCREEN_INFO.dpi, VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    cw, ch, cdpi, VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                     s, null, null
                 )
             }
         } catch (e: SecurityException) {
-            Log.w(logTag, "createOrSetVirtualDisplay: got SecurityException, re-requesting confirmation");
+            Log.w(logTag, "createOrSetVirtualDisplay: got SecurityException, re-requesting confirmation")
             // This initiates a prompt dialog for the user to confirm screen projection.
             requestMediaProjection()
         }
@@ -583,7 +751,7 @@ class MainService : Service() {
         Log.d(logTag, "MediaFormat.MIMETYPE_VIDEO_VP9 :$MIME_TYPE")
         videoEncoder = MediaCodec.createEncoderByType(MIME_TYPE)
         val mFormat =
-            MediaFormat.createVideoFormat(MIME_TYPE, SCREEN_INFO.width, SCREEN_INFO.height)
+            MediaFormat.createVideoFormat(MIME_TYPE, getCaptureWidth(), getCaptureHeight())
         mFormat.setInteger(MediaFormat.KEY_BIT_RATE, VIDEO_KEY_BIT_RATE)
         mFormat.setInteger(MediaFormat.KEY_FRAME_RATE, VIDEO_KEY_FRAME_RATE)
         mFormat.setInteger(
