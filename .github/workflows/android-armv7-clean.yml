@@ -38,7 +38,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-          ref: clean-1.4.6
+          ref: fix-android-capture-rotation
 
       - name: Fix submodules
         run: |

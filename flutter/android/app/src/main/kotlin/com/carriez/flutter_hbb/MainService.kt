@@ -277,12 +277,15 @@ class MainService : Service() {
 
         val max = max(w,h)
         val min = min(w,h)
+        // BB CUSTOM FIX:
+        // Bu tabletlerde MediaProjection frame yönünü ters verdiği için
+        // RustDesk capture ölçülerini ters çeviriyoruz.
         if (orientation == ORIENTATION_LANDSCAPE) {
-            w = max
-            h = min
+          w = min
+          h = max
         } else {
-            w = min
-            h = max
+          w = max
+          h = min
         }
         Log.d(logTag,"updateScreenInfo:w:$w,h:$h")
         var scale = 1
