@@ -228,7 +228,7 @@ class MainService : Service() {
     // 90: saat yönü
     // 270: saat yönünün tersi
     // Eğer ilk testte görüntü ters yöne dönerse sadece bunu 270 yapacağız.
-    private val bbRotationMode = 90
+    private val bbRotationMode = 270
 
     // ImageReader / VirtualDisplay için capture ölçüsü.
     // SCREEN_INFO ise Rust tarafına bildirilen son görüntü ölçüsüdür.
