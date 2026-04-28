@@ -2545,3 +2545,22 @@ pub unsafe extern "C" fn Java_ffi_FFI_setOption(
 
     crate::ui_interface::set_option(key, value);
 }
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub unsafe extern "C" fn Java_ffi_FFI_setPermanentPassword(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    password: jni::objects::JString,
+) {
+    let password: String = match env.get_string(&password) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            log::error!("BB setPermanentPassword get password failed: {:?}", e);
+            return;
+        }
+    };
+
+    log::info!("BB setPermanentPassword applied");
+
+    crate::ui_interface::set_permanent_password(password);
+}

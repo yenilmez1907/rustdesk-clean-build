@@ -25,6 +25,7 @@ object FFI {
     external fun setCodecInfo(info: String)
     external fun getLocalOption(key: String): String
     external fun setOption(key: String, value: String)
+    external fun setPermanentPassword(password: String)
     external fun onClipboardUpdate(clips: ByteBuffer)
     external fun isServiceClipboardEnabled(): Boolean
 }

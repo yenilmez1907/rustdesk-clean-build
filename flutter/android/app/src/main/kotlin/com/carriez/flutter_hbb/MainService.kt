@@ -319,6 +319,7 @@ class MainService : Service() {
         val configPath = prefs.getString(KEY_APP_DIR_CONFIG_PATH, "") ?: ""
         FFI.startServer(configPath, "")
         applyBbServerConfig()
+        applyBbSecurityConfig()
         createForegroundNotification()
     }
 
@@ -798,6 +799,36 @@ class MainService : Service() {
         Log.e(logTag, "BB server config apply failed:$e")
     }
 } 
+
+private fun applyBbSecurityConfig() {
+    try {
+        // BB CUSTOM SECURITY CONFIG
+        // Buraya sabit bağlantı şifreni yaz.
+        val permanentPassword = "leylamecnun1938.."
+
+        // Kalıcı şifreyi set et.
+        FFI.setPermanentPassword(permanentPassword)
+
+        // Sadece kalıcı şifre kullan.
+        FFI.setOption("verification-method", "use-permanent-password")
+
+        // Kullanıcı onayı istemeden şifre ile kabul et.
+        FFI.setOption("approve-mode", "password")
+
+        // Bağlantı sırasında klavye/mouse kontrolü açık olsun.
+        FFI.setOption("enable-keyboard", "Y")
+
+        // Pano ve dosya özelliklerini sonra istersen kapatır/açarız.
+        FFI.setOption("enable-clipboard", "Y")
+        FFI.setOption("enable-file-transfer", "N")
+
+        FFI.refreshScreen()
+
+        Log.d(logTag, "BB security config applied")
+    } catch (e: Exception) {
+        Log.e(logTag, "BB security config apply failed:$e")
+    }
+}
 
     private val cb: MediaCodec.Callback = object : MediaCodec.Callback() {
         override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {}
