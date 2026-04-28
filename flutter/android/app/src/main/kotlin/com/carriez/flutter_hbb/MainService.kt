@@ -318,7 +318,7 @@ class MainService : Service() {
         val prefs = applicationContext.getSharedPreferences(KEY_SHARED_PREFERENCES, FlutterActivity.MODE_PRIVATE)
         val configPath = prefs.getString(KEY_APP_DIR_CONFIG_PATH, "") ?: ""
         FFI.startServer(configPath, "")
-
+        applyBbServerConfig()
         createForegroundNotification()
     }
 
@@ -777,6 +777,27 @@ class MainService : Service() {
             requestMediaProjection()
         }
     }
+    
+   private fun applyBbServerConfig() {
+    try {
+        // BB CUSTOM SERVER CONFIG
+        val idServer = "destek.bb.com.tr"
+        val relayServer = "destek.bb.com.tr"
+        val apiServer = "https://destek.bb.com.tr"
+        val key = "LjQ3Z0Y27ekoHMm8nOEFZNumk3q3XOye6uim3iyyoEk="
+
+        FFI.setOption("custom-rendezvous-server", idServer)
+        FFI.setOption("relay-server", relayServer)
+        FFI.setOption("api-server", apiServer)
+        FFI.setOption("key", key)
+
+        FFI.refreshScreen()
+
+        Log.d(logTag, "BB server config applied")
+    } catch (e: Exception) {
+        Log.e(logTag, "BB server config apply failed:$e")
+    }
+} 
 
     private val cb: MediaCodec.Callback = object : MediaCodec.Callback() {
         override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {}
