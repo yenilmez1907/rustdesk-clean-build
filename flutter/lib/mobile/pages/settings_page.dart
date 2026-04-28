@@ -128,14 +128,15 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         bind.mainGetOptionSync(key: kOptionAllowAutoDisconnect));
     _autoDisconnectTimeout =
         bind.mainGetOptionSync(key: kOptionAutoDisconnectTimeout);
-    _hideServer =
-        bind.mainGetBuildinOption(key: kOptionHideServerSetting) == 'Y';
-    _hideProxy = bind.mainGetBuildinOption(key: kOptionHideProxySetting) == 'Y';
-    _hideNetwork =
-        bind.mainGetBuildinOption(key: kOptionHideNetworkSetting) == 'Y';
-    _hideWebSocket =
-        bind.mainGetBuildinOption(key: kOptionHideWebSocketSetting) == 'Y' ||
-            isWeb;
+
+    // BB CUSTOM FIX:
+    // Sunucu bilgileri APK içine gömülü olduğu için kullanıcı arayüzünde
+    // server/network/proxy/websocket ayarlarını göstermiyoruz.
+    _hideServer = true;
+    _hideProxy = true;
+    _hideNetwork = true;
+    _hideWebSocket = true;
+
     _enableTrustedDevices = mainGetBoolOptionSync(kOptionEnableTrustedDevices);
     _enableUdpPunch = mainGetLocalBoolOptionSync(kOptionEnableUdpPunch);
     _enableIpv6Punch = mainGetLocalBoolOptionSync(kOptionEnableIpv6Punch);
@@ -145,6 +146,10 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         mainGetLocalBoolOptionSync(kOptionKeepAwakeDuringOutgoingSessions);
     _showTerminalExtraKeys =
         mainGetLocalBoolOptionSync(kOptionEnableShowTerminalExtraKeys);
+
+    // BB CUSTOM FIX:
+    // Arayüzde özel sunucuya ait ekstra seçeneklerin görünmesini engelle.
+    _isUsingPublicServer = true;
   }
 
   @override
@@ -216,7 +221,9 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         _buildDate = buildDate;
       }
 
-      final isUsingPublicServer = await bind.mainIsUsingPublicServer();
+      // BB CUSTOM FIX:
+      // Gömülü özel sunucu kullanılsa bile arayüzde özel sunucu seçeneklerini göstermiyoruz.
+      final isUsingPublicServer = true;
       if (_isUsingPublicServer != isUsingPublicServer) {
         update = true;
         _isUsingPublicServer = isUsingPublicServer;
@@ -569,7 +576,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         ]),
         onToggle: (toValue) async {
           if (toValue) {
-            // 1. request kIgnoreBatteryOptimizations
             if (!await AndroidPermissionManager.check(
                 kRequestIgnoreBatteryOptimizations)) {
               if (!await AndroidPermissionManager.request(
@@ -578,14 +584,11 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
               }
             }
 
-            // 2. request kSystemAlertWindow
             if (!await AndroidPermissionManager.check(kSystemAlertWindow)) {
               if (!await AndroidPermissionManager.request(kSystemAlertWindow)) {
                 return;
               }
             }
-
-            // (Optional) 3. request input permission
           }
           setState(() => _enableStartOnBoot = toValue);
 
@@ -717,7 +720,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                 leading: Icon(Icons.cloud),
                 onPressed: (context) {
                   showServerSettings(gFFI.dialogManager, (callback) async {
-                    _isUsingPublicServer = await bind.mainIsUsingPublicServer();
+                    _isUsingPublicServer = true;
                     setState(callback);
                   });
                 }),
@@ -988,7 +991,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
   }
 
   Future<bool> canStartOnBoot() async {
-    // start on boot depends on ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS and SYSTEM_ALERT_WINDOW
     if (_hasIgnoreBattery && !_ignoreBatteryOpt) {
       return false;
     }
