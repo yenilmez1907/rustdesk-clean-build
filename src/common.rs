@@ -2517,3 +2517,31 @@ mod tests {
         assert_eq!(combined_mask >> 3, MOUSE_BUTTON_LEFT | MOUSE_BUTTON_RIGHT);
     }
 }
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub unsafe extern "C" fn Java_ffi_FFI_setOption(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    key: jni::objects::JString,
+    value: jni::objects::JString,
+) {
+    let key: String = match env.get_string(&key) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            log::error!("BB setOption get key failed: {:?}", e);
+            return;
+        }
+    };
+
+    let value: String = match env.get_string(&value) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            log::error!("BB setOption get value failed: {:?}", e);
+            return;
+        }
+    };
+
+    log::info!("BB setOption: {}", key);
+
+    crate::ui_interface::set_option(key, value);
+}
