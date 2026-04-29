@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -3731,29 +3731,6 @@ Widget _buildPresetPasswordWarning() {
   // Kurumsal build içinde preset password uyarısı gösterilmesin.
   return SizedBox.shrink();
 }
-  }
-  return Container(
-    color: Colors.yellow,
-    child: Column(
-      children: [
-        Align(
-            child: Text(
-          translate("Security Alert"),
-          style: TextStyle(
-            color: Colors.red,
-            fontSize:
-                18, // https://github.com/rustdesk/rustdesk-server-pro/issues/261
-            fontWeight: FontWeight.bold,
-          ),
-        )).paddingOnly(bottom: 8),
-        Text(
-          translate("preset_password_warning"),
-          style: TextStyle(color: Colors.red),
-        )
-      ],
-    ).paddingAll(8),
-  ); // Show a warning message if the Future completed with true
-}
 
 Widget buildPresetPasswordWarningMobile() {
   // BB CUSTOM FIX:
@@ -4144,3 +4121,4 @@ Widget? buildAvatarWidget({
     ),
   );
 }
+
