@@ -253,15 +253,11 @@ class ServiceNotRunningNotification extends StatelessWidget {
             ElevatedButton.icon(
                 icon: const Icon(Icons.play_arrow),
                 onPressed: () {
-                  if (gFFI.userModel.userName.value.isEmpty &&
-                      bind.mainGetLocalOption(key: "show-scam-warning") !=
-                          "N") {
-                    showScamWarning(context, serverModel);
-                  } else {
-                    serverModel.toggleService();
-                  }
-                },
-                label: Text(translate("Start service")))
+  // BB CUSTOM FIX:
+  // Kurumsal build içinde scam uyarısı gösterilmesin.
+  bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
+  serverModel.toggleService();
+},                label: Text(translate("Start service")))
           ],
         ));
   }
@@ -595,14 +591,15 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                       label: Text(translate("Stop service")))
                   .marginOnly(bottom: 8)
               : SizedBox.shrink(),
-          PermissionRow(
-              translate("Screen Capture"),
-              serverModel.mediaOk,
-              !serverModel.mediaOk &&
-                      gFFI.userModel.userName.value.isEmpty &&
-                      bind.mainGetLocalOption(key: "show-scam-warning") != "N"
-                  ? () => showScamWarning(context, serverModel)
-                  : serverModel.toggleService),
+PermissionRow(
+    translate("Screen Capture"),
+    serverModel.mediaOk,
+    () {
+      // BB CUSTOM FIX:
+      // Screen Capture açılırken scam uyarısı gösterilmesin.
+      bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
+      serverModel.toggleService();
+    }),
           PermissionRow(translate("Input Control"), serverModel.inputOk,
               serverModel.toggleInput),
           PermissionRow(translate("Transfer file"), serverModel.fileOk,
@@ -928,10 +925,8 @@ void androidChannelInit() {
 }
 
 void showScamWarning(BuildContext context, ServerModel serverModel) {
-  showDialog(
-    context: context,
-    builder: (BuildContext context) {
-      return ScamWarningDialog(serverModel: serverModel);
-    },
-  );
+  // BB CUSTOM FIX:
+  // Scam popup tamamen kapalı.
+  bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
+  serverModel.toggleService();
 }

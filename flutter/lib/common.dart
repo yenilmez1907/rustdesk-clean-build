@@ -3727,9 +3727,10 @@ bool isInHomePage() {
 }
 
 Widget _buildPresetPasswordWarning() {
-  if (bind.mainGetBuildinOption(key: kOptionRemovePresetPasswordWarning) !=
-      'N') {
-    return SizedBox.shrink();
+  // BB CUSTOM FIX:
+  // Kurumsal build içinde preset password uyarısı gösterilmesin.
+  return SizedBox.shrink();
+}
   }
   return Container(
     color: Colors.yellow,
@@ -3755,30 +3756,15 @@ Widget _buildPresetPasswordWarning() {
 }
 
 Widget buildPresetPasswordWarningMobile() {
-  if (bind.isPresetPasswordMobileOnly()) {
-    return _buildPresetPasswordWarning();
-  } else {
-    return SizedBox.shrink();
-  }
+  // BB CUSTOM FIX:
+  // Mobilde sabit şifre uyarısı gösterilmesin.
+  return SizedBox.shrink();
 }
 
 Widget buildPresetPasswordWarning() {
-  return FutureBuilder<bool>(
-    future: bind.isPresetPassword(),
-    builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return CircularProgressIndicator(); // Show a loading spinner while waiting for the Future to complete
-      } else if (snapshot.hasError) {
-        return Text(
-            'Error: ${snapshot.error}'); // Show an error message if the Future completed with an error
-      } else if (snapshot.hasData && snapshot.data == true) {
-        return _buildPresetPasswordWarning();
-      } else {
-        return SizedBox
-            .shrink(); // Show nothing if the Future completed with false or null
-      }
-    },
-  );
+  // BB CUSTOM FIX:
+  // Desktop/web tarafında da preset password uyarısı gösterilmesin.
+  return SizedBox.shrink();
 }
 
 // https://github.com/leanflutter/window_manager/blob/87dd7a50b4cb47a375b9fc697f05e56eea0a2ab3/lib/src/widgets/virtual_window_frame.dart#L44
