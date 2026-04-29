@@ -184,9 +184,21 @@ class _ServerPageState extends State<ServerPage> {
   @override
   void initState() {
     super.initState();
+
+    // BB CUSTOM FIX:
+    // Scam uyarısı kapalı kalsın.
+    bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
+
+    // BB CUSTOM FIX:
+    // Floating window kapalı kalsın.
+    bind.mainSetLocalOption(
+        key: kOptionDisableFloatingWindow,
+        value: "Y");
+
     _updateTimer = periodic_immediate(const Duration(seconds: 3), () async {
       await gFFI.serverModel.fetchID();
     });
+
     gFFI.serverModel.checkAndroidPermission();
   }
 
@@ -199,6 +211,14 @@ class _ServerPageState extends State<ServerPage> {
   @override
   Widget build(BuildContext context) {
     checkService();
+
+    // BB CUSTOM FIX:
+    // Sayfa her açıldığında tekrar garantiye al.
+    bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
+    bind.mainSetLocalOption(
+        key: kOptionDisableFloatingWindow,
+        value: "Y");
+
     return ChangeNotifierProvider.value(
         value: gFFI.serverModel,
         child: Consumer<ServerModel>(
@@ -253,11 +273,12 @@ class ServiceNotRunningNotification extends StatelessWidget {
             ElevatedButton.icon(
                 icon: const Icon(Icons.play_arrow),
                 onPressed: () {
-  // BB CUSTOM FIX:
-  // Kurumsal build içinde scam uyarısı gösterilmesin.
-  bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
-  serverModel.toggleService();
-},                label: Text(translate("Start service")))
+                  // BB CUSTOM FIX:
+                  // Kurumsal build içinde scam uyarısı gösterilmesin.
+                  bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
+                  serverModel.toggleService();
+                },
+                label: Text(translate("Start service")))
           ],
         ));
   }
@@ -591,15 +612,15 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                       label: Text(translate("Stop service")))
                   .marginOnly(bottom: 8)
               : SizedBox.shrink(),
-PermissionRow(
-    translate("Screen Capture"),
-    serverModel.mediaOk,
-    () {
-      // BB CUSTOM FIX:
-      // Screen Capture açılırken scam uyarısı gösterilmesin.
-      bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
-      serverModel.toggleService();
-    }),
+          PermissionRow(
+              translate("Screen Capture"),
+              serverModel.mediaOk,
+              () {
+                // BB CUSTOM FIX:
+                // Screen Capture açılırken scam uyarısı gösterilmesin.
+                bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
+                serverModel.toggleService();
+              }),
           PermissionRow(translate("Input Control"), serverModel.inputOk,
               serverModel.toggleInput),
           PermissionRow(translate("Transfer file"), serverModel.fileOk,
