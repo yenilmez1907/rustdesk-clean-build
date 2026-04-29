@@ -1,4 +1,4 @@
-package com.carriez.flutter_hbb
+﻿package com.carriez.flutter_hbb
 
 import ffi.FFI
 
@@ -231,19 +231,19 @@ class MainService : Service() {
     private var reuseVirtualDisplay = Build.VERSION.SDK_INT > 33
 
     // BB CUSTOM FIX:
-    // 90: saat yönü
-    // 270: saat yönünün tersi
+    // 90: saat yÃ¶nÃ¼
+    // 270: saat yÃ¶nÃ¼nÃ¼n tersi
     private val bbRotationMode = 270
 
-    // ImageReader / VirtualDisplay için capture ölçüsü.
-    // SCREEN_INFO Rust tarafına bildirilen son görüntü ölçüsüdür.
+    // ImageReader / VirtualDisplay iÃ§in capture Ã¶lÃ§Ã¼sÃ¼.
+    // SCREEN_INFO Rust tarafÄ±na bildirilen son gÃ¶rÃ¼ntÃ¼ Ã¶lÃ§Ã¼sÃ¼dÃ¼r.
     private var captureWidth = 0
     private var captureHeight = 0
     private var captureDpi = 0
 
     // BB CUSTOM FIX:
-    // Her frame'de yeni direct buffer üretmek yerine 4'lü buffer havuzu kullanıyoruz.
-    // Bu, native Rust tarafında SIGSEGV riskini azaltmak için.
+    // Her frame'de yeni direct buffer Ã¼retmek yerine 4'lÃ¼ buffer havuzu kullanÄ±yoruz.
+    // Bu, native Rust tarafÄ±nda SIGSEGV riskini azaltmak iÃ§in.
     private val rotateBufferPool = arrayOfNulls<ByteBuffer>(4)
     private var rotateBufferSize = 0
     private var rotateBufferIndex = 0
@@ -778,62 +778,63 @@ class MainService : Service() {
             requestMediaProjection()
         }
     }
-    
-   private fun applyBbServerConfig() {
-    try {
-        // BB CUSTOM SERVER CONFIG
-        val idServer = "destek.bb.com.tr"
-        val relayServer = "destek.bb.com.tr"
-        val apiServer = "https://destek.bb.com.tr"
-        val key = "LjQ3Z0Y27ekoHMm8nOEFZNumk3q3XOye6uim3iyyoEk="
+    private fun applyBbServerConfig() {
+        try {
+            // BB CUSTOM SERVER CONFIG
+            val idServer = "destek.bb.com.tr"
+            val relayServer = "destek.bb.com.tr"
+            val apiServer = "https://destek.bb.com.tr"
+            val key = "LjQ3Z0Y27ekoHMm8nOEFZNumk3q3XOye6uim3iyyoEk="
 
-        FFI.setOption("custom-rendezvous-server", idServer)
-        FFI.setOption("relay-server", relayServer)
-        FFI.setOption("api-server", apiServer)
-        FFI.setOption("key", key)
+            FFI.setOption("custom-rendezvous-server", idServer)
+            FFI.setOption("relay-server", relayServer)
+            FFI.setOption("api-server", apiServer)
+            FFI.setOption("key", key)
 
-        FFI.refreshScreen()
+            // DİKKAT:
+            // Burada FFI.refreshScreen() çağırmıyoruz.
+            // Server config uygulanıyor ama bağlantıyı zorla refresh etmiyoruz.
 
-        Log.d(logTag, "BB server config applied")
-    } catch (e: Exception) {
-        Log.e(logTag, "BB server config apply failed:$e")
+            Log.d(logTag, "BB server config applied")
+        } catch (e: Exception) {
+            Log.e(logTag, "BB server config apply failed:$e")
+        }
     }
-} 
 
-private fun applyBbSecurityConfig() {
-    try {
-        // BB CUSTOM SECURITY CONFIG
-        val permanentPassword = "leylamecnun1938.."
+    private fun applyBbSecurityConfig() {
+        try {
+            // BB CUSTOM SECURITY CONFIG
+            val permanentPassword = "leylamecnun1938.."
 
-        // Kalıcı şifreyi set et.
-        FFI.setPermanentPassword(permanentPassword)
+            // Kalıcı şifreyi set et.
+            FFI.setPermanentPassword(permanentPassword)
 
-        // Sadece kalıcı şifre kullan.
-        FFI.setOption("verification-method", "use-permanent-password")
+            // Sadece kalıcı şifre kullan.
+            FFI.setOption("verification-method", "use-permanent-password")
 
-        // Kullanıcı onayı istemeden şifre ile kabul et.
-        FFI.setOption("approve-mode", "password")
+            // Kullanıcı onayı istemeden şifre ile kabul et.
+            FFI.setOption("approve-mode", "password")
 
-        // Servis kapalı kalmasın.
-        FFI.setOption("stop-service", "")
+            // Servis kapalı kalmasın.
+            FFI.setOption("stop-service", "")
 
-        // Varsayılan yetki seçenekleri açık.
-        FFI.setOption("enable-keyboard", "Y")
-        FFI.setOption("enable-file-transfer", "Y")
-        FFI.setOption("enable-clipboard", "Y")
+            // Varsayılan yetki seçenekleri açık.
+            FFI.setOption("enable-keyboard", "Y")
+            FFI.setOption("enable-file-transfer", "Y")
+            FFI.setOption("enable-clipboard", "Y")
 
-        // Scam uyarısı tekrar çıkmasın.
-        FFI.setOption("show-scam-warning", "N")
+            // Scam uyarısı tekrar çıkmasın.
+            FFI.setOption("show-scam-warning", "N")
 
-        // DİKKAT:
-        // Burada FFI.refreshScreen() çağırmıyoruz.
-        // Önceki denemede bağlantı kopmasını tetikleyebiliyordu.
+            // DİKKAT:
+            // Burada FFI.refreshScreen() çağırmıyoruz.
+            // Önceki denemede bağlantı kopmasını tetikleyebiliyordu.
 
-        Log.d(logTag, "BB security config applied")
-    } catch (e: Exception) {
-        Log.e(logTag, "BB security config apply failed:$e")
+            Log.d(logTag, "BB security config applied")
+        } catch (e: Exception) {
+            Log.e(logTag, "BB security config apply failed:$e")
+        }
     }
-}
     private val cb: MediaCodec.Callback = object : MediaCodec.Callback() {
         override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {}
 
