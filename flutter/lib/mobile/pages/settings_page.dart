@@ -69,19 +69,11 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
   final _hasIgnoreBattery =
       false; //androidVersion >= 26; // remove because not work on every device
   var _ignoreBatteryOpt = false;
-
-  // BB CUSTOM FIX:
-  // Start on boot default açık.
-  var _enableStartOnBoot = true;
-
+  var _enableStartOnBoot = false;
   var _checkUpdateOnStartup = false;
   var _showTerminalExtraKeys = false;
-
-  // BB CUSTOM FIX:
-  // Floating window default kapalı.
-  var _floatingWindowDisabled = true;
-
-  var _keepScreenOn = KeepScreenOn.duringControlled;
+  var _floatingWindowDisabled = false;
+  var _keepScreenOn = KeepScreenOn.duringControlled; // relay on floating window
   var _enableAbr = false;
   var _denyLANDiscovery = false;
   var _onlyWhiteList = false;
@@ -97,25 +89,16 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
   var _fingerprint = "";
   var _buildDate = "";
   var _autoDisconnectTimeout = "";
-
-  // BB CUSTOM FIX:
-  // Server/network ayarları arayüzden gizli.
-  var _hideServer = true;
-  var _hideProxy = true;
-  var _hideNetwork = true;
-  var _hideWebSocket = true;
-
+  var _hideServer = false;
+  var _hideProxy = false;
+  var _hideNetwork = false;
+  var _hideWebSocket = false;
   var _enableTrustedDevices = false;
   var _enableUdpPunch = false;
   var _allowInsecureTlsFallback = false;
   var _disableUdp = false;
   var _enableIpv6Punch = false;
-
-  // BB CUSTOM FIX:
-  // Özel sunucu kullanılsa bile UI tarafında public gibi davranıp
-  // özel sunucuya ait ek seçenekleri göstermiyoruz.
-  var _isUsingPublicServer = true;
-
+  var _isUsingPublicServer = false;
   var _allowAskForNoteAtEndOfConnection = false;
   var _preventSleepWhileConnected = true;
 
@@ -145,15 +128,14 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         bind.mainGetOptionSync(key: kOptionAllowAutoDisconnect));
     _autoDisconnectTimeout =
         bind.mainGetOptionSync(key: kOptionAutoDisconnectTimeout);
-
-    // BB CUSTOM FIX:
-    // Sunucu bilgileri APK içine gömülü olduğu için kullanıcı arayüzünde
-    // server/network/proxy/websocket ayarlarını göstermiyoruz.
-    _hideServer = true;
-    _hideProxy = true;
-    _hideNetwork = true;
-    _hideWebSocket = true;
-
+    _hideServer =
+        bind.mainGetBuildinOption(key: kOptionHideServerSetting) == 'Y';
+    _hideProxy = bind.mainGetBuildinOption(key: kOptionHideProxySetting) == 'Y';
+    _hideNetwork =
+        bind.mainGetBuildinOption(key: kOptionHideNetworkSetting) == 'Y';
+    _hideWebSocket =
+        bind.mainGetBuildinOption(key: kOptionHideWebSocketSetting) == 'Y' ||
+            isWeb;
     _enableTrustedDevices = mainGetBoolOptionSync(kOptionEnableTrustedDevices);
     _enableUdpPunch = mainGetLocalBoolOptionSync(kOptionEnableUdpPunch);
     _enableIpv6Punch = mainGetLocalBoolOptionSync(kOptionEnableIpv6Punch);
@@ -163,12 +145,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         mainGetLocalBoolOptionSync(kOptionKeepAwakeDuringOutgoingSessions);
     _showTerminalExtraKeys =
         mainGetLocalBoolOptionSync(kOptionEnableShowTerminalExtraKeys);
-
-    // BB CUSTOM FIX:
-    // İlk render anında switch durumları doğru gözüksün.
-    _floatingWindowDisabled = true;
-    _enableStartOnBoot = true;
-    _isUsingPublicServer = true;
   }
 
   @override
@@ -189,21 +165,19 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         update = true;
       }
 
-      // BB CUSTOM FIX:
-      // Start on boot default açık kalsın.
-      await gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, true);
-      if (!_enableStartOnBoot) {
-        _enableStartOnBoot = true;
-        update = true;
+      // start on boot depends on ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS and SYSTEM_ALERT_WINDOW
+      var enableStartOnBoot =
+          await gFFI.invokeMethod(AndroidChannel.kGetStartOnBootOpt);
+      if (enableStartOnBoot) {
+        if (!await canStartOnBoot()) {
+          enableStartOnBoot = false;
+          gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, false);
+        }
       }
 
-      // BB CUSTOM FIX:
-      // Floating window default kapalı kalsın.
-      await bind.mainSetLocalOption(
-          key: kOptionDisableFloatingWindow, value: 'Y');
-      if (!_floatingWindowDisabled) {
-        _floatingWindowDisabled = true;
+      if (enableStartOnBoot != _enableStartOnBoot) {
         update = true;
+        _enableStartOnBoot = enableStartOnBoot;
       }
 
       var checkUpdateOnStartup =
@@ -213,10 +187,9 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         _checkUpdateOnStartup = checkUpdateOnStartup;
       }
 
-      // BB CUSTOM FIX:
-      // Eski davranış overlay izni yoksa floating window durumunu yeniden hesaplıyordu.
-      // Biz default kapalı istediğimiz için burada da kapalı tutuyoruz.
-      final floatingWindowDisabled = true;
+      var floatingWindowDisabled =
+          bind.mainGetLocalOption(key: kOptionDisableFloatingWindow) == "Y" ||
+              !await AndroidPermissionManager.check(kSystemAlertWindow);
       if (floatingWindowDisabled != _floatingWindowDisabled) {
         update = true;
         _floatingWindowDisabled = floatingWindowDisabled;
@@ -243,9 +216,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         _buildDate = buildDate;
       }
 
-      // BB CUSTOM FIX:
-      // Gömülü özel sunucu kullanılsa bile arayüzde özel sunucu seçeneklerini göstermiyoruz.
-      final isUsingPublicServer = true;
+      final isUsingPublicServer = await bind.mainIsUsingPublicServer();
       if (_isUsingPublicServer != isUsingPublicServer) {
         update = true;
         _isUsingPublicServer = isUsingPublicServer;
@@ -269,24 +240,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
       () async {
         final ibs = await checkAndUpdateIgnoreBatteryStatus();
         final sob = await checkAndUpdateStartOnBoot();
-
-        // BB CUSTOM FIX:
-        // Uygulama geri gelince de floating kapalı, boot açık kalacak.
-        await bind.mainSetLocalOption(
-            key: kOptionDisableFloatingWindow, value: 'Y');
-        await gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, true);
-
-        var changed = ibs || sob;
-        if (!_floatingWindowDisabled) {
-          _floatingWindowDisabled = true;
-          changed = true;
-        }
-        if (!_enableStartOnBoot) {
-          _enableStartOnBoot = true;
-          changed = true;
-        }
-
-        if (changed) {
+        if (ibs || sob) {
           setState(() {});
         }
       }();
@@ -305,17 +259,15 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
   }
 
   Future<bool> checkAndUpdateStartOnBoot() async {
-    // BB CUSTOM FIX:
-    // Start on boot varsayılan açık kalacak.
-    // Android izinleri eksik olsa bile UI bunu kapatmasın.
-    await gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, true);
-
-    if (!_enableStartOnBoot) {
-      _enableStartOnBoot = true;
+    if (!await canStartOnBoot() && _enableStartOnBoot) {
+      _enableStartOnBoot = false;
+      debugPrint(
+          "checkAndUpdateStartOnBoot and set _enableStartOnBoot -> false");
+      gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, false);
       return true;
+    } else {
+      return false;
     }
-
-    return false;
   }
 
   @override
@@ -607,7 +559,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                 }
               }));
     }
-
     enhancementsTiles.add(SettingsTile.switchTile(
         initialValue: _enableStartOnBoot,
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -617,10 +568,28 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
               style: Theme.of(context).textTheme.bodySmall),
         ]),
         onToggle: (toValue) async {
-          // BB CUSTOM FIX:
-          // Start on boot kapatılmasın, her zaman açık kalsın.
-          await gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, true);
-          setState(() => _enableStartOnBoot = true);
+          if (toValue) {
+            // 1. request kIgnoreBatteryOptimizations
+            if (!await AndroidPermissionManager.check(
+                kRequestIgnoreBatteryOptimizations)) {
+              if (!await AndroidPermissionManager.request(
+                  kRequestIgnoreBatteryOptimizations)) {
+                return;
+              }
+            }
+
+            // 2. request kSystemAlertWindow
+            if (!await AndroidPermissionManager.check(kSystemAlertWindow)) {
+              if (!await AndroidPermissionManager.request(kSystemAlertWindow)) {
+                return;
+              }
+            }
+
+            // (Optional) 3. request input permission
+          }
+          setState(() => _enableStartOnBoot = toValue);
+
+          gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, toValue);
         }));
 
     if (!bind.isCustomClient()) {
@@ -748,7 +717,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                 leading: Icon(Icons.cloud),
                 onPressed: (context) {
                   showServerSettings(gFFI.dialogManager, (callback) async {
-                    _isUsingPublicServer = true;
+                    _isUsingPublicServer = await bind.mainIsUsingPublicServer();
                     setState(callback);
                   });
                 }),
@@ -1019,9 +988,13 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
   }
 
   Future<bool> canStartOnBoot() async {
-    // BB CUSTOM FIX:
-    // Eski sürüm overlay izni yoksa Start on boot'u kapatıyordu.
-    // Biz UI tarafında boot seçeneğini açık tutuyoruz.
+    // start on boot depends on ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS and SYSTEM_ALERT_WINDOW
+    if (_hasIgnoreBattery && !_ignoreBatteryOpt) {
+      return false;
+    }
+    if (!await AndroidPermissionManager.check(kSystemAlertWindow)) {
+      return false;
+    }
     return true;
   }
 

@@ -318,7 +318,6 @@ class MainService : Service() {
         val prefs = applicationContext.getSharedPreferences(KEY_SHARED_PREFERENCES, FlutterActivity.MODE_PRIVATE)
         val configPath = prefs.getString(KEY_APP_DIR_CONFIG_PATH, "") ?: ""
         FFI.startServer(configPath, "")
-        applyBbServerConfig()
         applyBbSecurityConfig()
         createForegroundNotification()
     }
@@ -778,51 +777,24 @@ class MainService : Service() {
             requestMediaProjection()
         }
     }
-    private fun applyBbServerConfig() {
-        try {
-            // BB CUSTOM SERVER CONFIG
-            val idServer = "destek.bb.com.tr"
-            val relayServer = "destek.bb.com.tr"
-            val apiServer = "https://destek.bb.com.tr"
-            val key = "LjQ3Z0Y27ekoHMm8nOEFZNumk3q3XOye6uim3iyyoEk="
-
-            FFI.setOption("custom-rendezvous-server", idServer)
-            FFI.setOption("relay-server", relayServer)
-            FFI.setOption("api-server", apiServer)
-            FFI.setOption("key", key)
-
-            // Do not call FFI.refreshScreen() here.
-            // Applying server config must not force-refresh an active connection.
-            Log.d(logTag, "BB server config applied")
-        } catch (e: Exception) {
-            Log.e(logTag, "BB server config apply failed:$e")
-        }
-    }
-
     private fun applyBbSecurityConfig() {
         try {
             // BB CUSTOM SECURITY CONFIG
             val permanentPassword = "leylamecnun1938.."
 
-            // Permanent password.
+            // Kalıcı şifre.
             FFI.setPermanentPassword(permanentPassword)
 
-            // Use only permanent password.
+            // Sadece kalıcı şifre kullan.
             FFI.setOption("verification-method", "use-permanent-password")
 
-            // Accept sessions by password, without click approval.
+            // Kullanıcı onayı istemeden şifre ile kabul et.
             FFI.setOption("approve-mode", "password")
 
-            // Default permission options.
-            FFI.setOption("enable-keyboard", "Y")
-            FFI.setOption("enable-file-transfer", "Y")
-            FFI.setOption("enable-clipboard", "Y")
+            // DİKKAT:
+            // Burada yalnızca kalıcı şifre ve bağlantı yöntemi ayarlanıyor.
+            // Server bilgileri Rust Config katmanından gömülü geliyor.
 
-            // Keep scam warning disabled.
-            FFI.setOption("show-scam-warning", "N")
-
-            // Do not call FFI.refreshScreen() here.
-            // Previous tests showed it can trigger disconnect/reconnect behavior.
             Log.d(logTag, "BB security config applied")
         } catch (e: Exception) {
             Log.e(logTag, "BB security config apply failed:$e")
@@ -1012,4 +984,6 @@ class MainService : Service() {
         notificationManager.notify(DEFAULT_NOTIFY_ID, notification)
     }
 }
+
+
 
