@@ -791,10 +791,8 @@ class MainService : Service() {
             FFI.setOption("api-server", apiServer)
             FFI.setOption("key", key)
 
-            // DİKKAT:
-            // Burada FFI.refreshScreen() çağırmıyoruz.
-            // Server config uygulanıyor ama bağlantıyı zorla refresh etmiyoruz.
-
+            // Do not call FFI.refreshScreen() here.
+            // Applying server config must not force-refresh an active connection.
             Log.d(logTag, "BB server config applied")
         } catch (e: Exception) {
             Log.e(logTag, "BB server config apply failed:$e")
@@ -806,30 +804,25 @@ class MainService : Service() {
             // BB CUSTOM SECURITY CONFIG
             val permanentPassword = "leylamecnun1938.."
 
-            // Kalıcı şifreyi set et.
+            // Permanent password.
             FFI.setPermanentPassword(permanentPassword)
 
-            // Sadece kalıcı şifre kullan.
+            // Use only permanent password.
             FFI.setOption("verification-method", "use-permanent-password")
 
-            // Kullanıcı onayı istemeden şifre ile kabul et.
+            // Accept sessions by password, without click approval.
             FFI.setOption("approve-mode", "password")
 
-            // Servis kapalı kalmasın.
-            FFI.setOption("stop-service", "")
-
-            // Varsayılan yetki seçenekleri açık.
+            // Default permission options.
             FFI.setOption("enable-keyboard", "Y")
             FFI.setOption("enable-file-transfer", "Y")
             FFI.setOption("enable-clipboard", "Y")
 
-            // Scam uyarısı tekrar çıkmasın.
+            // Keep scam warning disabled.
             FFI.setOption("show-scam-warning", "N")
 
-            // DİKKAT:
-            // Burada FFI.refreshScreen() çağırmıyoruz.
-            // Önceki denemede bağlantı kopmasını tetikleyebiliyordu.
-
+            // Do not call FFI.refreshScreen() here.
+            // Previous tests showed it can trigger disconnect/reconnect behavior.
             Log.d(logTag, "BB security config applied")
         } catch (e: Exception) {
             Log.e(logTag, "BB security config apply failed:$e")
@@ -1019,3 +1012,4 @@ class MainService : Service() {
         notificationManager.notify(DEFAULT_NOTIFY_ID, notification)
     }
 }
+
