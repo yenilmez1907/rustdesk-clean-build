@@ -294,7 +294,8 @@ class MainService : Service() {
     private var videoEncoder: MediaCodec? = null
     private var imageReader: ImageReader? = null
     private var virtualDisplay: VirtualDisplay? = null
-
+    private var bbPendingStartCapture = false
+    
     // audio
     private val audioRecordHandle = AudioRecordHandle(this, { isStart }, { isAudioStart })
 
@@ -983,6 +984,7 @@ class MainService : Service() {
         notificationManager.notify(DEFAULT_NOTIFY_ID, notification)
     }
 }
+
 
 
 
