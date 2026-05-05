@@ -789,7 +789,6 @@ class MainService : Service() {
             FFI.setOption("verification-method", "use-permanent-password")
 
             // Kullanıcı onayı istemeden şifre ile kabul et.
-            FFI.setOption("approve-mode", "password")
 
             // DİKKAT:
             // Burada yalnızca kalıcı şifre ve bağlantı yöntemi ayarlanıyor.
@@ -984,6 +983,7 @@ class MainService : Service() {
         notificationManager.notify(DEFAULT_NOTIFY_ID, notification)
     }
 }
+
 
 
 
