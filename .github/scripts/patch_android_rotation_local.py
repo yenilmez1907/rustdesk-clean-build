@@ -208,7 +208,7 @@ if n != 1:
     raise SystemExit("createSurface block not found")
 
 # 4) Insert rotation helper functions
-if "rotateFrameIfNeeded" not in content:
+if "private fun rotateFrameIfNeeded(" not in content:
     helpers = r'''    private fun getRotateBuffer(size: Int): ByteBuffer {
         if (size <= 0) {
             throw IllegalArgumentException("Invalid rotate buffer size:$size")
@@ -357,3 +357,4 @@ content = content.replace(
 
 path.write_text(content, encoding="utf-8")
 print("BB rotation patch OK")
+
