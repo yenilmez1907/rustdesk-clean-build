@@ -194,14 +194,16 @@ jobs:
           popd
 
           mkdir -p signed-apk
-          cp flutter/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk signed-apk/rustdesk-${VERSION}-armv7.apk
+          cp flutter/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk signed-apk/bb-destek-${VERSION}-armv7.apk
           ls -lh signed-apk/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-android-armv7-apk
+          name: bb-destek-android-armv7-apk
           path: signed-apk/*.apk
+
+
 
 
 
