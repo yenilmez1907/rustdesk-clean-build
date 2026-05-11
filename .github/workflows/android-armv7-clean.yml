@@ -45,3 +45,144 @@ jobs:
           git submodule sync
           git submodule update --init --recursive --force
 
+      - name: Skip embedded server config patch
+        run: echo "Clean build - skip server config patch"
+      - name: Skip rotation patch verification
+        run: echo "Clean build - skip rotation verify"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            cmake \
+            curl \
+            gcc-multilib \
+            git \
+            g++ \
+            g++-multilib \
+            libayatana-appindicator3-dev \
+            libasound2-dev \
+            libc6-dev \
+            libclang-dev \
+            libunwind-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgtk-3-dev \
+            libpam0g-dev \
+            libpulse-dev \
+            libva-dev \
+            libxcb-randr0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxdo-dev \
+            libxfixes-dev \
+            llvm-dev \
+            nasm \
+            ninja-build \
+            openjdk-17-jdk-headless \
+            pkg-config \
+            tree \
+            wget
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.ANDROID_FLUTTER_VERSION }}
+
+      - name: Patch Flutter
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: /opt/artifacts/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Build Android deps
+        env:
+          VCPKG_ROOT: /opt/artifacts/vcpkg
+          VCPKG_BINARY_SOURCES: clear
+        run: |
+          chmod +x flutter/build_android_deps.sh
+          if ! ./flutter/build_android_deps.sh armeabi-v7a; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do
+              echo "$f:"
+              echo "======"
+              cat "$f"
+              echo "======"
+            done
+            exit 1
+          fi
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@v4
+        with:
+          name: bridge-artifact
+          path: ./
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: armv7-linux-androideabi
+          components: rustfmt
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
+
+      - name: Build rustdesk native lib
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+          VCPKG_ROOT: /opt/artifacts/vcpkg
+          VCPKG_BINARY_SOURCES: clear
+          RUST_BACKTRACE: "1"
+        run: |
+          chmod +x flutter/ndk_arm.sh
+          ./flutter/ndk_arm.sh
+
+          mkdir -p flutter/android/app/src/main/jniLibs/armeabi-v7a
+
+          cp target/armv7-linux-androideabi/release/liblibrustdesk.so \
+            flutter/android/app/src/main/jniLibs/armeabi-v7a/librustdesk.so
+
+          cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/libc++_shared.so \
+            flutter/android/app/src/main/jniLibs/armeabi-v7a/
+
+          ls -lh flutter/android/app/src/main/jniLibs/armeabi-v7a/
+
+      - name: Build APK
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+        run: |
+          export PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
+
+          sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties || true
+          sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle || true
+
+          pushd flutter
+          flutter build apk --release --target-platform android-arm --split-per-abi
+          popd
+
+          mkdir -p signed-apk
+          cp flutter/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk signed-apk/rustdesk-${VERSION}-armv7.apk
+          ls -lh signed-apk/
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustdesk-android-armv7-apk
+          path: signed-apk/*.apk
+
