@@ -47,6 +47,9 @@ jobs:
 
       - name: Patch BB Android defaults
         run: python3 .github/scripts/patch_bb_android_defaults.py
+
+      - name: Patch Android rotation
+        run: python3 .github/scripts/patch_android_rotation_local.py
       - name: Skip rotation patch verification
         run: echo "Clean build - skip rotation verify"
       - name: Install dependencies
@@ -185,5 +188,6 @@ jobs:
         with:
           name: rustdesk-android-armv7-apk
           path: signed-apk/*.apk
+
 
 
