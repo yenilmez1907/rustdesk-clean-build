@@ -45,8 +45,8 @@ jobs:
           git submodule sync
           git submodule update --init --recursive --force
 
-      - name: Skip embedded server config patch
-        run: echo "Clean build - skip server config patch"
+      - name: Patch BB Android defaults
+        run: python3 .github/scripts/patch_bb_android_defaults.py
       - name: Skip rotation patch verification
         run: echo "Clean build - skip rotation verify"
       - name: Install dependencies
