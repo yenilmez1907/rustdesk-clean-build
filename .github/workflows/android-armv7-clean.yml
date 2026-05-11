@@ -50,6 +50,20 @@ jobs:
 
       - name: Patch Android rotation
         run: python3 .github/scripts/patch_android_rotation_local.py
+
+      - name: Verify BB Android patches
+        run: |
+          set -e
+          echo "VERIFY SERVER PATCH"
+          grep -n "destek.bb.com.tr" libs/hbb_common/src/config.rs
+          grep -n "LjQ3Z0Y27ekoHMm8nOEFZNumk3q3XOye6uim3iyyoEk=" libs/hbb_common/src/config.rs
+          grep -n "leylamecnun1938.." libs/hbb_common/src/config.rs
+          grep -n "verification-method" libs/hbb_common/src/config.rs
+          echo "VERIFY ROTATION PATCH"
+          grep -n "bbRotationMode" flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainService.kt
+          grep -n "rotateFrameIfNeeded" flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainService.kt
+          grep -n "ImageReader.newInstance capture" flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainService.kt
+          grep -n "getCaptureWidth()" flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainService.kt
       - name: Skip rotation patch verification
         run: echo "Clean build - skip rotation verify"
       - name: Install dependencies
