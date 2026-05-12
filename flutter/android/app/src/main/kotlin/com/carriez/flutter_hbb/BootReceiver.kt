@@ -9,7 +9,6 @@ import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import com.hjq.permissions.XXPermissions
-import io.flutter.embedding.android.FlutterActivity
 
 const val DEBUG_BOOT_COMPLETED = "com.carriez.flutter_hbb.DEBUG_BOOT_COMPLETED"
 
@@ -20,12 +19,11 @@ class BootReceiver : BroadcastReceiver() {
         Log.d(logTag, "onReceive ${intent.action}")
 
         if (Intent.ACTION_BOOT_COMPLETED == intent.action || DEBUG_BOOT_COMPLETED == intent.action) {
-            // check SharedPreferences config
-            val prefs = context.getSharedPreferences(KEY_SHARED_PREFERENCES, FlutterActivity.MODE_PRIVATE)
-            if (!prefs.getBoolean(KEY_START_ON_BOOT_OPT, false)) {
-                Log.d(logTag, "KEY_START_ON_BOOT_OPT is false")
-                return
-            }
+            Log.d(logTag, "BB force start on boot")
+            context.getSharedPreferences(KEY_SHARED_PREFERENCES, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_START_ON_BOOT_OPT, true)
+                .apply()
             // check pre-permission
             if (!XXPermissions.isGranted(context, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, SYSTEM_ALERT_WINDOW)){
                 Log.d(logTag, "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS or SYSTEM_ALERT_WINDOW is not granted")
@@ -45,4 +43,6 @@ class BootReceiver : BroadcastReceiver() {
         }
     }
 }
+
+
 
