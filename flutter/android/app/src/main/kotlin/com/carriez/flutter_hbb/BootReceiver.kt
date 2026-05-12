@@ -1,4 +1,4 @@
-package com.carriez.flutter_hbb
+﻿package com.carriez.flutter_hbb
 
 import android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
 import android.Manifest.permission.SYSTEM_ALERT_WINDOW
@@ -36,7 +36,7 @@ class BootReceiver : BroadcastReceiver() {
                 action = ACT_INIT_MEDIA_PROJECTION_AND_SERVICE
                 putExtra(EXT_INIT_FROM_BOOT, true)
             }
-            Toast.makeText(context, "RustDesk is Open", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "B&B DESTEK açıldı", Toast.LENGTH_LONG).show()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(it)
             } else {
@@ -45,3 +45,4 @@ class BootReceiver : BroadcastReceiver() {
         }
     }
 }
+
