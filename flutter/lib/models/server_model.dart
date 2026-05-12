@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -569,6 +569,9 @@ class ServerModel with ChangeNotifier {
         _clients.add(client);
       }
       _addTab(client);
+      if (client.authorized) {
+        startAndroidCaptureIfNeeded(client, "authorized_connection");
+      }
       // remove disconnected
       final index_disconnected = _clients
           .indexWhere((c) => c.disconnected && c.peerId == client.peerId);
@@ -694,12 +697,18 @@ class ServerModel with ChangeNotifier {
     });
   }
 
+  void startAndroidCaptureIfNeeded(Client client, String reason) {
+    if (!isAndroid) return;
+    if (client.isFileTransfer || client.isTerminal) return;
+    debugPrint("BB start_capture reason:$reason conn:${client.id} authorized:${client.authorized}");
+    Future.delayed(const Duration(milliseconds: 300), () {
+      parent.target?.invokeMethod("start_capture");
+    });
+  }
   void sendLoginResponse(Client client, bool res) async {
     if (res) {
       bind.cmLoginRes(connId: client.id, res: res);
-      if (!client.isFileTransfer && !client.isTerminal) {
-        parent.target?.invokeMethod("start_capture");
-      }
+      startAndroidCaptureIfNeeded(client, "manual_accept");
       parent.target?.invokeMethod("cancel_notification", client.id);
       client.authorized = true;
       notifyListeners();
@@ -952,3 +961,5 @@ Future<void> showClientsMayNotBeChangedAlert(FFI? ffi) async {
     );
   });
 }
+
+
