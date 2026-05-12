@@ -345,7 +345,7 @@ class MainService : Service() {
                 _isReady = true
                 if (bbPendingStartCapture || bbFromBoot) {
                     bbPendingStartCapture = false
-                    serviceHandler.postDelayed({
+                    Handler(Looper.getMainLooper()).postDelayed({
                         Log.d(logTag, "BB auto startCapture after mediaProjection fromBoot:$bbFromBoot")
                         startCapture()
                     }, 1000)
@@ -353,7 +353,7 @@ class MainService : Service() {
             } ?: let {
                 val delayMs = if (bbFromBoot) 30000L else 0L
                 Log.d(logTag, "getParcelableExtra intent null, schedule requestMediaProjection fromBoot:" + bbFromBoot + " delay:" + delayMs)
-                serviceHandler.postDelayed({
+                Handler(Looper.getMainLooper()).postDelayed({
                     Log.d(logTag, "BB requestMediaProjection delayed fromBoot:" + bbFromBoot + " delay:" + delayMs)
                     requestMediaProjection()
                 }, delayMs)
@@ -742,6 +742,7 @@ class MainService : Service() {
         notificationManager.notify(DEFAULT_NOTIFY_ID, notification)
     }
 }
+
 
 
 
