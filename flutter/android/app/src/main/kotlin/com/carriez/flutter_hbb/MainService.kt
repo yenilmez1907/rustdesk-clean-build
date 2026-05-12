@@ -219,6 +219,7 @@ class MainService : Service() {
     private var videoEncoder: MediaCodec? = null
     private var imageReader: ImageReader? = null
     private var virtualDisplay: VirtualDisplay? = null
+    private var bbPendingStartCapture = false
 
     // audio
     private val audioRecordHandle = AudioRecordHandle(this, { isStart }, { isAudioStart })
@@ -329,7 +330,8 @@ class MainService : Service() {
         if (intent?.action == ACT_INIT_MEDIA_PROJECTION_AND_SERVICE) {
             createForegroundNotification()
 
-            if (intent.getBooleanExtra(EXT_INIT_FROM_BOOT, false)) {
+            val bbFromBoot = intent.getBooleanExtra(EXT_INIT_FROM_BOOT, false)
+            if (bbFromBoot) {
                 FFI.startService()
             }
             Log.d(logTag, "service starting: ${startId}:${Thread.currentThread()}")
@@ -341,12 +343,23 @@ class MainService : Service() {
                     mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, it)
                 checkMediaPermission()
                 _isReady = true
+                if (bbPendingStartCapture || bbFromBoot) {
+                    bbPendingStartCapture = false
+                    serviceHandler.postDelayed({
+                        Log.d(logTag, "BB auto startCapture after mediaProjection fromBoot:$bbFromBoot")
+                        startCapture()
+                    }, 1000)
+                }
             } ?: let {
-                Log.d(logTag, "getParcelableExtra intent null, invoke requestMediaProjection")
-                requestMediaProjection()
+                val delayMs = if (bbFromBoot) 30000L else 0L
+                Log.d(logTag, "getParcelableExtra intent null, schedule requestMediaProjection fromBoot:" + bbFromBoot + " delay:" + delayMs)
+                serviceHandler.postDelayed({
+                    Log.d(logTag, "BB requestMediaProjection delayed fromBoot:" + bbFromBoot + " delay:" + delayMs)
+                    requestMediaProjection()
+                }, delayMs)
             }
         }
-        return START_NOT_STICKY // don't use sticky (auto restart), the new service (from auto restart) will lose control
+        return START_STICKY // don't use sticky (auto restart), the new service (from auto restart) will lose control
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -408,7 +421,9 @@ class MainService : Service() {
             return true
         }
         if (mediaProjection == null) {
-            Log.w(logTag, "startCapture fail,mediaProjection is null")
+            Log.w(logTag, "startCapture fail,mediaProjection is null; pending request")
+            bbPendingStartCapture = true
+            requestMediaProjection()
             return false
         }
         
@@ -727,4 +742,7 @@ class MainService : Service() {
         notificationManager.notify(DEFAULT_NOTIFY_ID, notification)
     }
 }
+
+
+
 
