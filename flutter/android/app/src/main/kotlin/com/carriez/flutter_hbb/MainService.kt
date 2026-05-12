@@ -352,6 +352,10 @@ class MainService : Service() {
                 }
             } ?: let {
                 val delayMs = if (bbFromBoot) 30000L else 0L
+                if (bbFromBoot) {
+                    bbPendingStartCapture = true
+                    Log.d(logTag, "BB boot capture pending set true")
+                }
                 Log.d(logTag, "getParcelableExtra intent null, schedule requestMediaProjection fromBoot:" + bbFromBoot + " delay:" + delayMs)
                 Handler(Looper.getMainLooper()).postDelayed({
                     Log.d(logTag, "BB requestMediaProjection delayed fromBoot:" + bbFromBoot + " delay:" + delayMs)
@@ -742,6 +746,7 @@ class MainService : Service() {
         notificationManager.notify(DEFAULT_NOTIFY_ID, notification)
     }
 }
+
 
 
 
